@@ -1,2 +1,3 @@
 # docker ignore
-tmp/*
+home
+*.example

@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  ubuntu-sshd:
+    image: ubuntu-sshd
+    command: ["--user", "USER", "--passwd", "PASSWD"]
+    container_name: ubuntu-sshd
+    hostname: ubuntu-sshd
+    volumes:
+     - ./home:/home/USER
+    ports:
+      - "22"
+    restart: on-failure
