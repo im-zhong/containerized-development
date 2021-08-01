@@ -1,20 +1,21 @@
 #! /bin/bash
 
 # debug
-# set -xeuo pipefail
-set -euo pipefail
+set -xeuo pipefail
+# set -euo pipefail
 
-function is_user_exist()
-{
-    local user="$1"
-    local result=$(cat /etc/passwd | grep "^${user}")
+# set -e: exit immediately if a command exits with a non-zero status
+# function is_user_exist()
+# {
+#     local user="$1"
+#     local result=$(cat /etc/passwd | grep "^${user}")
 
-    if [ -z "${result}" ]; then
-        return 0
-    else
-        return 1
-    fi
-}
+#     if [ -z "${result}" ]; then
+#         return 0
+#     else
+#         return 1
+#     fi
+# }
 
 function add_user()
 {
@@ -36,8 +37,10 @@ function add_user()
         group_option="--group ${group}"
     fi
 
-    is_user_exist ${user}
-    if [ $? -eq 0 ]; then
+    # fix: if we restart, the is_user_exist will return 1 and cause exit because set -e
+    # is_user_exist ${user}
+    local result=$(cat /etc/passwd | grep "^${user}")
+    if [ -z "${result}" ]; then
         echo "info: adduser uid: ${uid}, user: ${user}, gid: ${gid} group: ${group}."
         adduser \
         --disabled-password \
@@ -160,7 +163,7 @@ function help()
 }
 
 # main
-options=$(getopt -o u:g:p:s:a:h:: --longoptions uid:,user:,gid:,group:,password:,sudo:,authorized_keys:,help:: -- "$@")
+options=$(getopt -o u:g:p:s:a:h:: --longoptions uid:,user:,gid:,group:,passwd:,sudo:,authorized_keys:,help:: -- "$@")
 eval set -- "${options}"
 
 uid=""
@@ -248,13 +251,19 @@ if [ -n "${sudo}" ]; then
     make_sudoer ${user} ${sudo}
 fi
 
-# authenticate ssh public key 
+# authenticate ssh public key
 if [ -n "${authorized_keys}" ]; then
     local home="/home/${user}"
     authenticate_pubkeys ${user} ${group} ${home} ${authorized_keys}
 fi
 
+# plugins
+if [ -f "/etc/plugin.sh" ]; then
+    echo "info: run /etc/plugin.sh"
+    /etc/plugin.sh
+fi
+
 # start openssh-server at PID 1
 echo "info: start openssh-server."
-mkdir /run/sshd
+mkdir -p /run/sshd
 exec /usr/sbin/sshd -D
