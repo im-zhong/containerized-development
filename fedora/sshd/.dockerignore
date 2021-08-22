@@ -1,0 +1,5 @@
+# docker ignore
+home
+*.example
+*.md
+*.yaml
