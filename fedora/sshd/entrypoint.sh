@@ -1,8 +1,8 @@
 #! /bin/bash
 
 # debug
-set -xeuo pipefail
-# set -euo pipefail
+# set -xeuo pipefail
+set -euo pipefail
 echo "-------- start fedora-sshd at $(date) --------"
 
 sshd_config="/etc/ssh/sshd_config"
@@ -136,8 +136,12 @@ function fix_ssh_permission()
     fi
     if [ -d ${home}/.ssh ]; then
         chmod 700 ${home}/.ssh
-        chmod 600 ${home}/.ssh/*
-        chmod 644 ${home}/.ssh/*.pub
+        if ls ${home}/.ssh/* 1>/dev/null 2>&1; then
+            chmod 600 ${home}/.ssh/*
+        fi
+        if ls ${home}/.ssh/*.pub 1>/dev/null 2>&1; then
+            chmod 644 ${home}/.ssh/*.pub
+        fi
     fi
 }
 
