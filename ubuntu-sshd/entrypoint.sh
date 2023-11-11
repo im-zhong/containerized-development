@@ -2,52 +2,17 @@
 
 # debug
 set -xeuo pipefail
-# set -euo pipefail
-
-# set -e: exit immediately if a command exits with a non-zero status
-# function is_user_exist()
-# {
-#     local user="$1"
-#     local result=$(cat /etc/passwd | grep "^${user}")
-
-#     if [ -z "${result}" ]; then
-#         return 0
-#     else
-#         return 1
-#     fi
-# }
 
 function add_user()
 {
     local uid="$1"
     local user="$2"
-    local gid="$3"
-    local group="$4"
 
     local uid_option=""
     if [ -n "${uid}" ]; then
         uid_option="--uid ${uid}"
     fi
-    # local gid_option=""
-    # if [ -n "${gid}" ]; then
-    #     gid_option="--gid ${gid}"
-    # fi
-    # local group_option=""
-    # if [ -n "${group}" ]; then
-    #     group_option="--group ${group}"
-    # fi
 
-    # 我们的目标是什么 是在这台机器上 创建一个和宿主机一样的用户和用户组
-    # 这样在宿主机上的文件才才可以正常的被我们自己访问
-    # 所以我们需要先创建一个用户组
-    # 然后使用 --ingroup 将用户加入到这个用户组
-    # fix: add group first
-    # 或许创建用户的时候会默认创建一个相同id的用户组？
-    # 我们试一下吧
-    # 果然如此 所以我们实际上不需要gid 和 group这两个参数
-
-    # fix: if we restart, the is_user_exist will return 1 and cause exit because set -e
-    # is_user_exist ${user}
     local result=$(cat /etc/passwd | grep "^${user}")
     if [ -z "${result}" ]; then
         echo "info: adduser uid: ${uid}, user: ${user}, gid: ${gid} group: ${group}."
@@ -55,11 +20,7 @@ function add_user()
         --disabled-password \
         --gecos '' \
         ${uid_option} \
-        # ${gid_option} \
-        # ${group_option} \
         ${user}
-        # --home HOME \
-        # --shell SHELL \
     else
         echo "info: ${user} is exist."
     fi
@@ -102,6 +63,7 @@ function change_password_authentication()
     fi
 }
 
+# 有一个更简单的方法 就是将我们加入sudo组里面 这样不用修改文件
 function make_sudoer()
 {
     local user="$1"
@@ -133,25 +95,24 @@ function make_sudoer()
     fi
 }
 
-# 注意home路径的权限问题
-function authenticate_pubkeys()
+function add_to_sudo_group()
 {
     local user="$1"
-    local group="$2"
-    local home="$3"
-    local authorized_keys="$4"
+    local sudo="$2"
 
-    echo "info: cp ${authorized_keys} to ${home}/.ssh/authorized_keys."
-    mkdir -p ${home}/.ssh
-    cp ${authorized_keys} ${home}/.ssh/authorized_keys
-    chown -R ${user}:${group} ${home}/.ssh
-    chmod 700 ${home}/.ssh
-    chmod 600 ${home}/.ssh/authorized_keys
+    if [ "${sudo}" = "nopasswd" ]; then
+        usermod -aG sudo ${user}
+    elif [ "${sudo}" = "passwd" ]; then
+        usermod -aG sudo ${user}
+    else
+        echo "error: invalid operand of option <sudo>, use -h for more infomation."
+        exit 1
+    fi
 }
 
 function help()
 {
-    echo "docker run [docker-options] ubuntu-sshd [options]"
+    echo "docker run [docker-options] ubuntu-sshd:focal [options]"
     echo "introduction:"
     echo "  This image will help creating an openssh-server based on ubuntu."
     echo "  create the same user as youself in the host machine in the container, the uid and gid could get by command 'id \$USER'."
@@ -159,29 +120,22 @@ function help()
     echo "options:"
     echo "  --uid <UID>                     force the new userid to be the given UID. see adduser(8)."
     echo "  -u,--user <USER>                the new user name. see adduser(8)."
-    echo "  --gid <GID>                     add the new user to the GID group."
-    echo "                                  if the group is not exists, force the new groupid to be the given GID. see adduser(8)."
-    echo "  -g,--group <GROUP>              add the new user to the GROUP, if the group is not exists, create it. see adduser(8)."
     echo "  -p,--passwd <PASSWD>            the password of the user."
     echo "                                  if you do not give this option, then you can not login by passwd, which means you must give the authorized_keys."
     echo "                                  see sshd_config(5) PasswordAuthentication PubkeyAuthentication"
     echo "  -s,--sudo <passwd|nopasswd>     give the user sudo privilege." 
     echo "                                  passwd means you can get the sudo priviledge with input the passwd; nopasswd give you the nopasswd sudo privilege."
-    echo "  -a,--authorized_keys <PATH>     give the IN-THE-CONTAINER absolute path of the public keys file."
     echo "  -h,--help                       show help infomation."
 }
 
 # main
-options=$(getopt -o u:g:p:s:a:h:: --longoptions uid:,user:,gid:,group:,passwd:,sudo:,authorized_keys:,help:: -- "$@")
+options=$(getopt -o u:p:s:a:h:: --longoptions uid:,user:,passwd:,sudo:,help:: -- "$@")
 eval set -- "${options}"
 
 uid=""
 user=""
-gid=""
-group=""
 passwd=""
 sudo=""
-authorized_keys=""
 
 while true; do
     case "$1" in
@@ -193,24 +147,12 @@ while true; do
             user="$2"
             shift 2
             ;;
-        --gid)
-            gid="$2"
-            shift 2
-            ;;
-        -g|--group)
-            group="$2"
-            shift 2
-            ;;
         -p|--passwd)
             passwd="$2"
             shift 2
             ;;
         -s|--sudo)
             sudo="$2"
-            shift 2
-            ;;
-        -a|--authorized_keys)
-            authorized_keys="$2"
             shift 2
             ;;
         -h|--help)
@@ -234,15 +176,12 @@ done
 # echo all options
 echo "uid: ${uid}"
 echo "user: ${user}"
-echo "gid: ${gid}"
-echo "group: ${group}"
 echo "passwd: ${passwd}"
 echo "sudo: ${sudo}"
-echo "authorized_keys: ${authorized_keys}"
 
 # add user
 if [ -n "${user}" ]; then
-    add_user "${uid}" "${user}" "${gid}" "${group}"
+    add_user "${uid}" "${user}"
 else
     echo "error: option <user> must be given."
 fi
@@ -259,17 +198,6 @@ change_password_authentication ${passwd}
 if [ -n "${sudo}" ]; then
     make_sudoer ${user} ${sudo}
 fi
-
-# 感觉这个功能非常奇怪啊 我为什么要在容器启动的时候搞这个东西
-# 而且我只能先把文件复制到 /home 然后挂在到容器里面 然后再在容器里面执行一大堆操作
-# 这些操作太繁琐而且只能认证一台机器 非常不合理 去掉这个操作
-# authenticate ssh public key
-# if [ -n "${authorized_keys}" ]; then
-#     home="/home/${user}"
-#     # fix: group shoule be the same as user
-#     # authenticate_pubkeys ${user} ${group} ${home} ${authorized_keys}
-#     authenticate_pubkeys ${user} ${user} ${home} ${authorized_keys}
-# fi
 
 # plugins
 if [ -f "/etc/plugin.sh" ]; then
