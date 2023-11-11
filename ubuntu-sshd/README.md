@@ -1,5 +1,7 @@
 ## ubuntu-sshd
 
+TL;DR. just run `./build.py -n <name> -p <ssh-port>` and you are done!
+
 This image is for those who want to connect to a container via ssh.
 Tou could use this image to start an openssh-server and expose its port, 
 then you could just use `ssh -p PORT user@hostname` to connect into it.

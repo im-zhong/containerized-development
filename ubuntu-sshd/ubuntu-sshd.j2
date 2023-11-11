@@ -1,0 +1,11 @@
+services:
+  ubuntu-sshd:
+    image: ubuntu-sshd:focal
+    command: ["--uid", "{{uid}}", "--user", "{{user}}", "--passwd", "{{passwd}}"]
+    container_name: {{name}}
+    hostname: {{name}}
+    volumes:
+     - ./home:/home/{{user}}
+    ports:
+      - "{{port}}:22"
+    restart: always

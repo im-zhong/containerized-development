@@ -1,12 +1,11 @@
-version: "3.9"
 services:
   ubuntu-sshd:
     image: ubuntu-sshd:focal
-    command: ["--uid", "1000", "--user", "zhangzhong", "--passwd", "zhangzhong" , "--sudo", "nopasswd"]
-    container_name: ubuntu-sshd
-    hostname: ubuntu-sshd
+    command: ["--uid", "1000", "--user", "zhangzhong", "--passwd", "zhangzhong"]
+    container_name: zz-test
+    hostname: zz-test
     volumes:
      - ./home:/home/zhangzhong
     ports:
-      - "3322:22"
-    restart: on-failure
+      - "23122:22"
+    restart: always
